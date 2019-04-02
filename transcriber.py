@@ -212,46 +212,11 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets):
             working_list.clear()
             total_snippets -= thread_count
 
-def main():
-    VERSION = 1.0
-    print("-------------------------------")
-    print("     Audio Transcriber - v" + str(VERSION))
-    print("-------------------------------")   
-
-    parser = optparse.OptionParser('usage %prog '+\
-                                   '-f --file <target file>')
-    parser.add_option('-f', '--file',
-                      action='store', dest='filename', type='string',\
-                      help='specify target file', metavar="FILE")
-    
-    (options, args) = parser.parse_args()
-
-    start_time = time.time()
-    script_path = os.path.abspath(os.path.dirname(sys.argv[0]))    
-
-    
+def runOperations(INPUT_FILE, script_path, start_time):
     #Settings
     thread_count = 8   
     section_length = 30 # In Seconds
     
-    INPUT_FILE = options.filename
-    
-    if INPUT_FILE == 'NoneType':
-        print(parser.usage)
-        exit(0)
-
-    while True:
-        if os.path.isfile("/" + str(INPUT_FILE)) == True:
-            INPUT_FILE = str(INPUT_FILE)
-            break
-        elif os.path.isfile(script_path + "\\" + str(INPUT_FILE)) == True:
-            INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
-            break
-        else:
-            print("[!]ERROR: Cannot find specified file!")
-            break
-            exit(0)
-        
     FILENAME = stripExtension(INPUT_FILE, script_path)
     FILE_TYPE = fileType(INPUT_FILE)   
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
@@ -293,6 +258,45 @@ def main():
 
     run_time = runTime(start_time)
     print('Entire job took: ' + run_time)
+    
+def main():
+    VERSION = 1.0
+    print("-------------------------------")
+    print("     Audio Transcriber - v" + str(VERSION))
+    print("-------------------------------")   
+
+    parser = optparse.OptionParser('Options: '+\
+                                   '\n -h --help <show this help message and exit>' +\
+                                   '\n -f --file <target file> (REQUIRED)')
+    
+    parser.add_option('-f', '--file',
+                      action='store', dest='filename', type='string',\
+                      help='specify target file', metavar="FILE")
+    
+    (options, args) = parser.parse_args()
+
+    start_time = time.time()
+    script_path = os.path.abspath(os.path.dirname(sys.argv[0]))    
+
+    INPUT_FILE = options.filename
+    
+    if INPUT_FILE == None:
+        print("[!]No Input File Supplied!\n")
+        print(parser.usage)
+        exit
+    else:  
+        while True:
+            if os.path.isfile("/" + str(INPUT_FILE)) == True:
+                INPUT_FILE = str(INPUT_FILE)
+                break
+            elif os.path.isfile(script_path + "\\" + str(INPUT_FILE)) == True:
+                INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
+                break
+            else:
+                print("[!]ERROR: Cannot find specified file!")
+                break
+                exit
+        runOperations(INPUT_FILE, script_path, start_time)
     
 if __name__ == '__main__':
     main()

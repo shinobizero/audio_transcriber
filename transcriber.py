@@ -38,8 +38,9 @@ def runTime(start_time):
         run_time_string = str(total_seconds) + " seconds " + str(total_milliseconds) + " milliseconds"
     return run_time_string
 
-def cleanUp(script_path):
+def cleanUp(script_path, new_sound):
     shutil.rmtree(script_path + '/temp', ignore_errors=True)
+    os.remove(new_sound)
     
 def makeTemp(script_path):
     if not os.path.exists(script_path + '\\temp'):
@@ -248,7 +249,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     print(success)
 
     writeOutput(TEMP_FILE, FILENAME, script_path)    
-    cleanUp(script_path)
+    cleanUp(script_path, new_sound)
     print("[!]Completed Transcription")
 
     run_time = runTime(start_time)

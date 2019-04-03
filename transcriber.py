@@ -75,7 +75,6 @@ def fileType(INPUT_FILE):
 def calculateSections(FILENAME, section_length, new_sound):
     sound = new_sound
     duration = (len(sound)+1)/1000
-    section_length = 30
     if duration % section_length == 0:
         sections = duration/section_length
     else:

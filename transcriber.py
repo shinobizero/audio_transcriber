@@ -211,9 +211,8 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets):
             working_list.clear()
             total_snippets -= thread_count
 
-def runOperations(INPUT_FILE, script_path, start_time):
-    #Settings
-    thread_count = 8   
+def runOperations(INPUT_FILE, script_path, start_time, thread_count):
+    #Settings   
     section_length = 30 # In Seconds
     
     FILENAME = stripExtension(INPUT_FILE, script_path)
@@ -266,11 +265,16 @@ def main():
 
     parser = optparse.OptionParser('Options: '+\
                                    '\n -h --help <show this help message and exit>' +\
-                                   '\n -f --file <target file> (REQUIRED)')
+                                   '\n -f --file <target file> (REQUIRED)' +\
+                                   '\n -t --threads <threads to use> (10 Default)')
     
     parser.add_option('-f', '--file',
                       action='store', dest='filename', type='string',\
                       help='specify target file', metavar="FILE")
+
+    parser.add_option('-t', '--threads',
+                      action='store', dest='threads', type='int',\
+                      help='specify amount of threads to use')
     
     (options, args) = parser.parse_args()
 
@@ -278,7 +282,11 @@ def main():
     script_path = os.path.abspath(os.path.dirname(sys.argv[0]))    
 
     INPUT_FILE = options.filename
+    thread_count = options.threads
     
+    if thread_count == None:
+        thread_count = 10
+
     if INPUT_FILE == None:
         print("[!]No Input File Supplied!\n")
         print(parser.usage)
@@ -295,7 +303,7 @@ def main():
                 print("[!]ERROR: Cannot find specified file!")
                 break
                 exit
-        runOperations(INPUT_FILE, script_path, start_time)
+        runOperations(INPUT_FILE, script_path, start_time, thread_count)
     
 if __name__ == '__main__':
     main()

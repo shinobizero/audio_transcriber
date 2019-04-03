@@ -78,7 +78,7 @@ def calculateSections(FILENAME, section_length, new_sound):
     if duration % section_length == 0:
         sections = duration/section_length
     else:
-        sections = duration//section_length+1            
+        sections = duration//section_length+1
     return sections
 
 def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
@@ -211,10 +211,7 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets):
             working_list.clear()
             total_snippets -= thread_count
 
-def runOperations(INPUT_FILE, script_path, start_time, thread_count):
-    #Settings   
-    section_length = 30 # In Seconds
-    
+def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length):
     FILENAME = stripExtension(INPUT_FILE, script_path)
     FILE_TYPE = fileType(INPUT_FILE)   
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
@@ -266,7 +263,9 @@ def main():
     parser = optparse.OptionParser('Options: '+\
                                    '\n -h --help <show this help message and exit>' +\
                                    '\n -f --file <target file> (REQUIRED)' +\
-                                   '\n -t --threads <threads to use> (10 Default)')
+                                   '\n -t --threads <threads to use> (10 Default)' +\
+                                   '\nSplitting Options: ' +\
+                                   '\n -s --section <Length of splitting sections> (In Seconds)')
     
     parser.add_option('-f', '--file',
                       action='store', dest='filename', type='string',\
@@ -275,6 +274,10 @@ def main():
     parser.add_option('-t', '--threads',
                       action='store', dest='threads', type='int',\
                       help='specify amount of threads to use')
+
+    parser.add_option('-s', '--section',
+                      action='store', dest='section_length', type='int',\
+                      help='specify length of sections for splitting')
     
     (options, args) = parser.parse_args()
 
@@ -283,9 +286,13 @@ def main():
 
     INPUT_FILE = options.filename
     thread_count = options.threads
+    section_length = options.section_length
     
     if thread_count == None:
         thread_count = 10
+
+    if section_length == None:
+        section_length = 30
 
     if INPUT_FILE == None:
         print("[!]No Input File Supplied!\n")
@@ -303,7 +310,7 @@ def main():
                 print("[!]ERROR: Cannot find specified file!")
                 break
                 exit
-        runOperations(INPUT_FILE, script_path, start_time, thread_count)
+        runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length)
     
 if __name__ == '__main__':
     main()

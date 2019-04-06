@@ -241,6 +241,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
         new_sound = new_sound = AudioSegment.from_wav(AUDIO_OUTPUT_FILE)
     else:
         print("[+]No file conversion needed!")
+        DELETE_WAV = False
         new_sound = AudioSegment.from_wav(INPUT_FILE)
 
     makeTemp(script_path)
@@ -255,8 +256,11 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     success = checkSuccess(total_snippets, TEMP_FILE)
     print(success)
 
-    writeOutput(TEMP_FILE, FILENAME, script_path)    
-    cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
+    writeOutput(TEMP_FILE, FILENAME, script_path)
+    if DELETE_WAV == False:
+        cleanUp(script_path, None)
+    else:
+        cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
     print("-------------------------------")
     print("[!]Completed Transcription")
 

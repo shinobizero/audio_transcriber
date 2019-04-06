@@ -38,9 +38,11 @@ def runTime(start_time):
         run_time_string = str(total_seconds) + " seconds " + str(total_milliseconds) + " milliseconds"
     return run_time_string
 
-def cleanUp(script_path, new_sound):
+def cleanUp(script_path, FILENAME, DELETE_CONVERT=False):
     shutil.rmtree(script_path + '/temp', ignore_errors=True)
-    os.remove(new_sound)
+    if FILENAME != None:
+        if os.path.isfile(script_path + '/' + FILENAME + ".wav") == True and DELETE_CONVERT == True:
+            os.remove(script_path + '/' + FILENAME + ".wav")
     
 def makeTemp(script_path):
     if not os.path.exists(script_path + '\\temp'):
@@ -76,10 +78,13 @@ def fileType(INPUT_FILE):
 def calculateSections(FILENAME, section_length, new_sound):
     sound = new_sound
     duration = (len(sound)+1)/1000
-    if duration % section_length == 0:
-        sections = duration/section_length
+    if duration < section_length:
+        sections = 1
     else:
-        sections = duration//section_length+1
+        if duration % section_length == 0:
+            sections = duration/section_length
+        else:
+            sections = duration//section_length+1
     return sections
 
 def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
@@ -216,6 +221,8 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     FILENAME = stripExtension(INPUT_FILE, script_path)
     FILE_TYPE = fileType(INPUT_FILE)   
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
+
+    cleanUp(script_path, None)
         
     if FILE_TYPE == 'NONE' or FILE_TYPE == 'Unsupported':
         exit(0)
@@ -249,11 +256,13 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     print(success)
 
     writeOutput(TEMP_FILE, FILENAME, script_path)    
-    cleanUp(script_path, new_sound)
+    cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
+    print("-------------------------------")
     print("[!]Completed Transcription")
 
     run_time = runTime(start_time)
     print('Entire job took: ' + run_time)
+    print("-------------------------------")
     
 def main():
     VERSION = 1.0
@@ -265,7 +274,7 @@ def main():
                                    '\n -h --help <show this help message and exit>' +\
                                    '\n -f --file <target file> (REQUIRED)' +\
                                    '\n -t --threads <threads to use> (10 Default)' +\
-                                   '\nSplitting Options: ' +\
+                                   '\n\nSplitting Options: ' +\
                                    '\n -s --section <Length of splitting sections> (In Seconds)')
     
     parser.add_option('-f', '--file',

@@ -38,10 +38,13 @@ def cleanUp(script_path, FILENAME, DELETE_CONVERT=False):
         if os.path.isfile(script_path + '/' + FILENAME + ".wav") == True and DELETE_CONVERT == True:
             os.remove(script_path + '/' + FILENAME + ".wav")
     
-def makeTemp(script_path):
+def makeTemp(script_path, TEMP_FILE):
     if not os.path.exists(script_path + '\\temp'):
         os.mkdir(script_path + '\\temp')
-    
+    with open(TEMP_FILE, "w+") as file:
+        file.write("")
+    file.close()
+   
 def stripExtension(INPUT_FILE, script_path):
     if '.mp3' in INPUT_FILE:
         FILENAME = INPUT_FILE.replace(".mp3", "")
@@ -56,18 +59,21 @@ def stripExtension(INPUT_FILE, script_path):
     return FILENAME
 
 def fileType(INPUT_FILE):
-        kind = filetype.guess(INPUT_FILE)
-        if kind is None:
-            FILE_TYPE = 'NONE'
-        elif kind.extension == 'mp3' and kind.mime == 'audio/mpeg':
-            FILE_TYPE = kind.extension
-        elif kind.extension == 'm4a' and kind.mime == 'audio/m4a':
-            FILE_TYPE = kind.extension
-        elif kind.extension == 'wav' and kind.mime == 'audio/x-wav':
-            FILE_TYPE = kind.extension
-        else:
-            FILE_TYPE = 'Unsupported'
-        return FILE_TYPE
+    """Determines file type of the input file, if it can't find it
+    by using file type module it will attempt to use the file's extension,
+    if it has one"""
+    kind = filetype.guess(INPUT_FILE)
+    if kind is None:
+        FILE_TYPE = 'NONE'
+    elif kind.extension == 'mp3' and kind.mime == 'audio/mpeg':
+        FILE_TYPE = kind.extension
+    elif kind.extension == 'm4a' and kind.mime == 'audio/m4a':
+        FILE_TYPE = kind.extension
+    elif kind.extension == 'wav' and kind.mime == 'audio/x-wav':
+        FILE_TYPE = kind.extension
+    else:
+        FILE_TYPE = 'Unsupported'
+    return FILE_TYPE
 
 def calculateSections(FILENAME, section_length, new_sound):
     sound = new_sound
@@ -107,20 +113,26 @@ def soundCheck(INPUT_FILE, AUDIO_OUTPUT_FILE):
     return completed
 
 def audioSplitter(FILENAME, sections, section_length, script_path, new_sound):
-    section = section_length * 1000
-    start = 0
-    stop = start + section
-    section_count = 0
-    print("[+]Splitting audio file...")
-    while section_count < sections:
-        section_count += 1
-        dummy_diff = len(str(int(sections)))-len(str(section_count))
-        dummy_zeros = dummy_diff*str(0)
-        stop = start + section               
-        sound = new_sound[start:stop]
-        output_name = script_path + "/temp/" + FILENAME + "-" + str(dummy_zeros) + str(section_count) + ".wav"
-        sound.export(output_name, format="wav")
-        start = stop
+    if sections == 1:
+        print("[+]No file splitting!")
+        sound_file = script_path + '/' + FILENAME + '.wav'
+        new_sound_file = script_path + '/temp/' + FILENAME + '.wav'
+        shutil.copyfile(sound_file, new_sound_file)
+    else:
+        section = section_length * 1000
+        start = 0
+        stop = start + section
+        section_count = 0
+        print("[+]Splitting audio file...")
+        while section_count < sections:
+            section_count += 1
+            dummy_diff = len(str(int(sections)))-len(str(section_count))
+            dummy_zeros = dummy_diff*str(0)
+            stop = start + section               
+            sound = new_sound[start:stop]
+            output_name = script_path + "/temp/" + FILENAME + "-" + str(dummy_zeros) + str(section_count) + ".wav"
+            sound.export(output_name, format="wav")
+            start = stop
 
 def getSnippets(script_path):
     """Makes a list of all audio snippets in the temp directory"""
@@ -132,13 +144,9 @@ def getSnippets(script_path):
     total_snippets = len(split_wav)
     return split_wav, total_snippets
 
-def getOutputName(FILENAME):
+def createOutput(FILENAME, output_list, script_path):
     TIMESTAMP = str(datetime.datetime.strftime(datetime.datetime.today() , '%Y%m%d-%H%M'))
     OUTPUT_FILENAME = FILENAME + "-" + TIMESTAMP + ".txt"
-    return OUTPUT_FILENAME
-
-def createOutput(FILENAME, output_list, script_path):
-    OUTPUT_FILENAME = getOutputName(FILENAME)
     with open(script_path + "/" + OUTPUT_FILENAME, "a") as f:
         for line in output_list:   
             f.write(line)
@@ -168,47 +176,67 @@ def writeOutput(TEMP_FILE, FILENAME, script_path):
     output_list.sort()
     createOutput(FILENAME, output_list, script_path)
 
-def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar):
-    dummy_diff = len(str(int(total_snippets)))-len(str(line_count))
-    dummy_zeros = dummy_diff*str(0)
-    line_count = str(dummy_zeros)+str(line_count)
-    
-    r = sr.Recognizer()
-    with sr.AudioFile(snippet) as source:
-        audio = r.record(source)        
-        text = r.recognize_google(audio)
-        text_string = str(line_count + "- " + text)
+def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, single_file=False):
+    if single_file == True:
+        try:
+            r = sr.Recognizer()
+            with sr.AudioFile(snippet) as source:
+                audio = r.record(source)        
+                text = r.recognize_google(audio)
+                text_string = text
+        except:
+            text_string = "!!!NO AUDIBLE SPEECH FOUND!!!"
+    elif single_file == False:
+        try:
+            dummy_diff = len(str(int(total_snippets)))-len(str(line_count))
+            dummy_zeros = dummy_diff*str(0)
+            line_count = str(dummy_zeros)+str(line_count)        
+            r = sr.Recognizer()
+            with sr.AudioFile(snippet) as source:
+                audio = r.record(source)        
+                text = r.recognize_google(audio)
+                text_string = str(line_count + "- " + text)
+        except:
+            text_string = str(line_count) + "- !!!NO AUDIBLE SPEECH FOUND!!!"
     with open(TEMP_FILE, "a") as f:
         f.write(text_string + "\n")
     f.close()
     pbar.update(1)
 
-def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets):
-    line_count = 0
+def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=False):
     pbar_total = total_snippets
-    with tqdm(total=pbar_total, leave=True, desc="[+]Transcribing audio file snippets") as pbar:
-        while total_snippets != 0:
-            if thread_count > total_snippets:
-                thread_count = total_snippets
-            working_list =[]    
-            for i in range(thread_count):
-                working_list.append(split_wav[i])
-            for i in working_list:
-                del split_wav[0]
-            with concurrent.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
+    working_list =[] 
+    if single_file == True:
+            with tqdm(total=pbar_total, leave=True, desc="[+]Transcribing audio file") as pbar:
+                working_list.append(split_wav[0])
                 for snippet in working_list:
-                    line_count += 1
-                    executor.submit(transcribeAudio, snippet, line_count, TEMP_FILE, total_snippets, pbar,)
-            working_list.clear()
-            total_snippets -= thread_count
+                    transcribeAudio(snippet, None, TEMP_FILE, total_snippets, pbar, single_file=True)
+    elif single_file == False:
+        line_count = 0
+        snippets_to_complete = total_snippets
+        snippets_completed = 0
+        with tqdm(total=pbar_total, leave=True, desc="[+]Transcribing audio file snippets") as pbar:
+            while snippets_completed != total_snippets:
+                if thread_count > snippets_to_complete:
+                    thread_count = snippets_to_complete 
+                for i in range(thread_count):
+                    working_list.append(split_wav[i])
+                for i in working_list:
+                    del split_wav[0]
+                with concurrent.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
+                    for snippet in working_list:
+                        line_count += 1
+                        executor.submit(transcribeAudio, snippet, line_count, TEMP_FILE, total_snippets, pbar,)
+                working_list.clear()
+                snippets_to_complete -= thread_count
+                snippets_completed += thread_count
 
 def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length):
     FILENAME = stripExtension(INPUT_FILE, script_path)
-    FILE_TYPE = fileType(INPUT_FILE)   
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
     DELETE_WAV = True
-    cleanUp(script_path, None)
-        
+
+    FILE_TYPE = fileType(INPUT_FILE)           
     if FILE_TYPE == 'NONE' or FILE_TYPE == 'Unsupported':
         exit(0)
     elif FILE_TYPE == 'mp3' or FILE_TYPE == 'm4a':
@@ -223,29 +251,33 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
             else:
                 time.sleep(5)
         print(" [!]Completed file converion")
-        new_sound = new_sound = AudioSegment.from_wav(AUDIO_OUTPUT_FILE)
+        new_sound = AudioSegment.from_wav(AUDIO_OUTPUT_FILE)
     else:
         print("[+]No file conversion needed!")
         DELETE_WAV = False
         new_sound = AudioSegment.from_wav(INPUT_FILE)
 
-    makeTemp(script_path)
+    cleanUp(script_path, None)
+    makeTemp(script_path,TEMP_FILE)
 
-    sections = calculateSections(FILENAME, section_length, new_sound)    
-    audioSplitter(FILENAME, sections, section_length, script_path, new_sound)
-    
+    sections = calculateSections(FILENAME, section_length, new_sound)
+    audioSplitter(FILENAME, sections, section_length, script_path, new_sound)  
     split_wav, total_snippets = getSnippets(script_path)
     
-    
-    runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets)
+    if total_snippets == 1:
+        runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=True)
+    else:
+        runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets)
     success = checkSuccess(total_snippets, TEMP_FILE)
     print(success)
 
     writeOutput(TEMP_FILE, FILENAME, script_path)
+    
     if DELETE_WAV == False:
         cleanUp(script_path, None)
     elif DELETE_WAV == True: 
         cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
+
     print("-------------------------------")
     print("[!]Completed Transcription")
 
@@ -254,6 +286,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     print("-------------------------------")
     
 def main():
+    """This just processes user input & options and passes it to runOperations()"""
     VERSION = 1.0
     print("-------------------------------")
     print("     Audio Transcriber - v" + str(VERSION))
@@ -263,8 +296,8 @@ def main():
                                    '\n -h --help <show this help message and exit>' +\
                                    '\n -f --file <target file> (REQUIRED)' +\
                                    '\n -t --threads <threads to use> (10 Default)' +\
-                                   '\n\nSplitting Options: ' +\
-                                   '\n -s --section <Length of splitting sections> (In Seconds)')
+                                   '\n\nSplitting Options: (Only Specify 1 Option)' +\
+                                   '\n -s --section <Length of splitting sections> (In Seconds)' +\
     
     parser.add_option('-f', '--file',
                       action='store', dest='filename', type='string',\

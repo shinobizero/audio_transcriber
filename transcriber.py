@@ -185,7 +185,7 @@ def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, single
                 text = r.recognize_google(audio)
                 text_string = text
         except:
-            text_string = "!!!NO AUDIBLE SPEECH FOUND!!!"
+            text_string = "!!!ERROR processing audio!!!"
     elif single_file == False:
         try:
             dummy_diff = len(str(int(total_snippets)))-len(str(line_count))
@@ -197,7 +197,7 @@ def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, single
                 text = r.recognize_google(audio)
                 text_string = str(line_count + "- " + text)
         except:
-            text_string = str(line_count) + "- !!!NO AUDIBLE SPEECH FOUND!!!"
+            text_string = str(line_count) + "- !!!ERROR processing audio!!!"
     with open(TEMP_FILE, "a") as f:
         f.write(text_string + "\n")
     f.close()
@@ -231,14 +231,15 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_
                 snippets_to_complete -= thread_count
                 snippets_completed += thread_count
 
-def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length):
+def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split):
     FILENAME = stripExtension(INPUT_FILE, script_path)
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
     DELETE_WAV = True
 
     FILE_TYPE = fileType(INPUT_FILE)           
     if FILE_TYPE == 'NONE' or FILE_TYPE == 'Unsupported':
-        exit(0)
+        print("[!]ERROR: Unsupported File Type!!!")
+        return
     elif FILE_TYPE == 'mp3' or FILE_TYPE == 'm4a':
         print("[+]Converting to WAV format...")
         new_sound = convertWAV(INPUT_FILE, FILE_TYPE, FILENAME)
@@ -260,7 +261,11 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     cleanUp(script_path, None)
     makeTemp(script_path,TEMP_FILE)
 
-    sections = calculateSections(FILENAME, section_length, new_sound)
+    if no_split == False:
+        sections = calculateSections(FILENAME, section_length, new_sound)
+    elif no_split == True:
+        sections = 1
+
     audioSplitter(FILENAME, sections, section_length, script_path, new_sound)  
     split_wav, total_snippets = getSnippets(script_path)
     
@@ -289,16 +294,17 @@ def main():
     """This just processes user input & options and passes it to runOperations()"""
     VERSION = 1.0
     print("-------------------------------")
-    print("     Audio Transcriber - v" + str(VERSION))
+    print("    Audio Transcriber - v" + str(VERSION))
     print("-------------------------------")   
 
     parser = optparse.OptionParser('Options: '+\
                                    '\n -h --help <show this help message and exit>' +\
                                    '\n -f --file <target file> (REQUIRED)' +\
                                    '\n -t --threads <threads to use> (10 Default)' +\
-                                   '\n\nSplitting Options: (Only Specify 1 Option)' +\
+                                   '\n\nSplitting Options: ' +\
                                    '\n -s --section <Length of splitting sections> (In Seconds)' +\
-    
+                                   '\n -n --nosplit <Specify no splitting of input file> (Not Recommended)')
+
     parser.add_option('-f', '--file',
                       action='store', dest='filename', type='string',\
                       help='specify target file', metavar="FILE")
@@ -310,6 +316,10 @@ def main():
     parser.add_option('-s', '--section',
                       action='store', dest='section_length', type='int',\
                       help='specify length of sections for splitting')
+
+    parser.add_option('-n', '--nosplit',
+                      action='store_true', dest='nosplit', default=False,\
+                      help='Specify no splitting of input file')
     
     (options, args) = parser.parse_args()
 
@@ -326,6 +336,8 @@ def main():
     if section_length == None:
         section_length = 30
 
+    no_split = options.nosplit
+    
     if INPUT_FILE == None:
         print("[!]No Input File Supplied!\n")
         print(parser.usage)
@@ -342,7 +354,7 @@ def main():
                 print("[!]ERROR: Cannot find specified file!")
                 break
                 exit
-        runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length)
+        runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split)
     
 if __name__ == '__main__':
     main()

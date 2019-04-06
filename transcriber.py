@@ -221,7 +221,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     FILENAME = stripExtension(INPUT_FILE, script_path)
     FILE_TYPE = fileType(INPUT_FILE)   
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
-
+    DELETE_WAV = True
     cleanUp(script_path, None)
         
     if FILE_TYPE == 'NONE' or FILE_TYPE == 'Unsupported':
@@ -259,7 +259,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     writeOutput(TEMP_FILE, FILENAME, script_path)
     if DELETE_WAV == False:
         cleanUp(script_path, None)
-    else:
+    elif DELETE_WAV == True: 
         cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
     print("-------------------------------")
     print("[!]Completed Transcription")

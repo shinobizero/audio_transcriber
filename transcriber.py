@@ -90,8 +90,6 @@ def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
     
     AUDIO_OUTPUT_FILE = FILENAME + ".wav"    
     sound.export(AUDIO_OUTPUT_FILE, format="wav")
-
-    soundCheck(INPUT_FILE, AUDIO_OUTPUT_FILE)
     
     return AUDIO_OUTPUT_FILE
 

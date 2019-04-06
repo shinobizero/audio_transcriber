@@ -146,10 +146,6 @@ def createOutput(FILENAME, output_list, script_path):
             f.write(line)
     f.close()
     
-def removeOldTemp(TEMP_FILE):
-    if os.path.isfile(TEMP_FILE) == True:
-        os.remove(TEMP_FILE)
-    
 def checkSuccess(total_snippets, TEMP_FILE):
     print("[+]Writing transcription to file...")
     line_count = 0
@@ -259,7 +255,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     print("[!]Completed Transcription")
 
     run_time = runTime(start_time)
-    print('Entire job took: ' + run_time)
+    print('[!]Entire job took: ' + run_time)
     print("-------------------------------")
     
 def main():

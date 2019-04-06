@@ -180,9 +180,6 @@ def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar):
         audio = r.record(source)        
         text = r.recognize_google(audio)
         text_string = str(line_count + "- " + text)
-        writeTranscription(TEMP_FILE, text_string, pbar)   
-        
-def writeTranscription(TEMP_FILE, text_string, pbar):
     with open(TEMP_FILE, "a") as f:
         f.write(text_string + "\n")
     f.close()

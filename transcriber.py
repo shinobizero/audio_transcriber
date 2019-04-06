@@ -12,12 +12,6 @@ from tqdm import tqdm
 import speech_recognition as sr
 from pydub import AudioSegment
 
-def timeStamp():
-    """Makes a timestamp for the output filename """
-    now = datetime.datetime.strftime(datetime.datetime.today() , '%Y%m%d-%H%M')
-    timestamp = str(now)
-    return timestamp
-
 def runTime(start_time):
     """Returns a formatted string of total duration time"""
     total_duration = time.time() - start_time
@@ -141,7 +135,7 @@ def getSnippets(script_path):
     return split_wav, total_snippets
 
 def getOutputName(FILENAME):
-    TIMESTAMP = timeStamp()
+    TIMESTAMP = str(datetime.datetime.strftime(datetime.datetime.today() , '%Y%m%d-%H%M'))
     OUTPUT_FILENAME = FILENAME + "-" + TIMESTAMP + ".txt"
     return OUTPUT_FILENAME
 

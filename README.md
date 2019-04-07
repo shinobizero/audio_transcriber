@@ -1,7 +1,7 @@
 # audio_transcriber
 Transcodes audio files to text, supports MP3, M4A, WAV. Does File Conversion. No Online API's. Python 3
 
-For big files the program will crash if you don't split the file, it does this automatically by default
+For big files the program will crash if you don't split the file, it splits automatically by default
 
 Install prequisites
 

@@ -64,15 +64,22 @@ def fileType(INPUT_FILE):
     if it has one"""
     kind = filetype.guess(INPUT_FILE)
     if kind is None:
-        FILE_TYPE = 'NONE'
+        FILE_TYPE = None
     elif kind.extension == 'mp3' and kind.mime == 'audio/mpeg':
         FILE_TYPE = kind.extension
     elif kind.extension == 'm4a' and kind.mime == 'audio/m4a':
         FILE_TYPE = kind.extension
     elif kind.extension == 'wav' and kind.mime == 'audio/x-wav':
         FILE_TYPE = kind.extension
-    else:
-        FILE_TYPE = 'Unsupported'
+    if FILE_TYPE == None:
+        if ".mp3" in INPUT_FILE:
+            FILE_TYPE = 'mp3'
+        elif ".m4a" in INPUT_FILE:
+            FILE_TYPE = 'm4a'
+        elif ".wav" in INPUT_FILE:
+            FILE_TYPE = 'wav'
+        else:
+            FILE_TYPE = 'Unsupported'
     return FILE_TYPE
 
 def calculateSections(FILENAME, section_length, new_sound):
@@ -237,7 +244,7 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     DELETE_WAV = True
 
     FILE_TYPE = fileType(INPUT_FILE)           
-    if FILE_TYPE == 'NONE' or FILE_TYPE == 'Unsupported':
+    if FILE_TYPE == 'Unsupported':
         print("[!]ERROR: Unsupported File Type!!!")
         return
     elif FILE_TYPE == 'mp3' or FILE_TYPE == 'm4a':

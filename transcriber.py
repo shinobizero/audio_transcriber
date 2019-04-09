@@ -52,6 +52,8 @@ def stripExtension(INPUT_FILE, script_path):
         FILENAME = INPUT_FILE.replace(".wav", "")
     elif '.m4a' in INPUT_FILE:
         FILENAME = INPUT_FILE.replace(".m4a", "")
+    elif '.mp4' in INPUT_FILE:
+        FILENAME = INPUT_FILE.replace(".mp4", "")
     else:
         FILENAME = INPUT_FILE
     FILENAME = FILENAME.replace(script_path, "")
@@ -60,8 +62,8 @@ def stripExtension(INPUT_FILE, script_path):
 
 def fileType(INPUT_FILE):
     """Determines file type of the input file, if it can't find it
-    by using file type module it will attempt to use the file's extension,
-    if it has one"""
+    by using file type module, if that fails it will attempt to use the file's
+    extension, if it has one"""
     kind = filetype.guess(INPUT_FILE)
     if kind is None:
         FILE_TYPE = None
@@ -71,6 +73,8 @@ def fileType(INPUT_FILE):
         FILE_TYPE = kind.extension
     elif kind.extension == 'wav' and kind.mime == 'audio/x-wav':
         FILE_TYPE = kind.extension
+    elif kind.extension == 'mp4' and kind.mime == 'video/mp4':
+        FILE_TYPE = kind.extension
     if FILE_TYPE == None:
         if ".mp3" in INPUT_FILE:
             FILE_TYPE = 'mp3'
@@ -78,6 +82,8 @@ def fileType(INPUT_FILE):
             FILE_TYPE = 'm4a'
         elif ".wav" in INPUT_FILE:
             FILE_TYPE = 'wav'
+        elif ".mp4" in INPUT_FILE:
+            FILE_TYPE = 'mp4'
         else:
             FILE_TYPE = 'Unsupported'
     return FILE_TYPE
@@ -93,6 +99,12 @@ def calculateSections(FILENAME, section_length, new_sound):
         else:
             sections = duration//section_length+1
     return sections
+
+def extractAudio(FILE_TYPE, FILENAME, script_path):
+    AUDIO_OUTPUT_FILE = FILENAME + ".wav"
+    command = str("ffmpeg -i " + script_path + "/" + FILENAME + "." + FILE_TYPE +" -f wav -vn -ab 192000 " + script_path + "/" + AUDIO_OUTPUT_FILE)  
+    subprocess.call(command, shell=True)
+    return AUDIO_OUTPUT_FILE
 
 def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
     """Converts the input file to wav format """
@@ -238,18 +250,34 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_
                 snippets_to_complete -= thread_count
                 snippets_completed += thread_count
 
-def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split):
+def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split, keep_wav):
     FILENAME = stripExtension(INPUT_FILE, script_path)
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
-    DELETE_WAV = True
+    check_required = False
+    
+    if keep_wav == False:
+        DELETE_WAV = True
+    elif keep_wav == True:
+        DELETE_WAV = False
 
     FILE_TYPE = fileType(INPUT_FILE)           
-    if FILE_TYPE == 'Unsupported':
+    if FILE_TYPE == None or FILE_TYPE == 'Unsupported':
         print("[!]ERROR: Unsupported File Type!!!")
         return
+    elif FILE_TYPE == 'mp4':
+        print("[+]Extracting Audio from Video...")
+        new_sound = extractAudio(FILE_TYPE, FILENAME, script_path)
+        check_required = True
     elif FILE_TYPE == 'mp3' or FILE_TYPE == 'm4a':
         print("[+]Converting to WAV format...")
         new_sound = convertWAV(INPUT_FILE, FILE_TYPE, FILENAME)
+        check_required = True
+    elif FILE_TYPE == 'wav':
+        print("[+]No file conversion needed!")
+        DELETE_WAV = False
+        new_sound = AudioSegment.from_wav(INPUT_FILE)
+
+    if check_required == True:
         AUDIO_OUTPUT_FILE = new_sound
         completed_conversion = False
         while completed_conversion == False:
@@ -258,12 +286,8 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
                 completed_conversion = True
             else:
                 time.sleep(5)
-        print(" [!]Completed file converion")
+        print(" [!]Operation Completed")
         new_sound = AudioSegment.from_wav(AUDIO_OUTPUT_FILE)
-    else:
-        print("[+]No file conversion needed!")
-        DELETE_WAV = False
-        new_sound = AudioSegment.from_wav(INPUT_FILE)
 
     cleanUp(script_path, None)
     makeTemp(script_path,TEMP_FILE)
@@ -328,6 +352,10 @@ def main():
                       action='store_true', dest='nosplit', default=False,\
                       help='Specify no splitting of input file')
     
+    parser.add_option('-k', '--keep',
+                      action='store_true', dest='keep', default=False,\
+                      help='Keep wav file, if converting')
+    
     (options, args) = parser.parse_args()
 
     start_time = time.time()
@@ -336,6 +364,8 @@ def main():
     INPUT_FILE = options.filename
     thread_count = options.threads
     section_length = options.section_length
+    no_split = options.nosplit
+    keep_wav = options.keep
     
     if thread_count == None:
         thread_count = 10
@@ -343,7 +373,7 @@ def main():
     if section_length == None:
         section_length = 30
 
-    no_split = options.nosplit
+
     
     if INPUT_FILE == None:
         print("[!]No Input File Supplied!\n")
@@ -361,7 +391,7 @@ def main():
                 print("[!]ERROR: Cannot find specified file!")
                 break
                 exit
-        runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split)
+        runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split, keep_wav)
     
 if __name__ == '__main__':
     main()

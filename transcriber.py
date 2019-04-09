@@ -7,6 +7,7 @@ import shutil
 import optparse
 import datetime
 import filetype
+import subprocess
 import concurrent.futures
 from tqdm import tqdm
 import speech_recognition as sr

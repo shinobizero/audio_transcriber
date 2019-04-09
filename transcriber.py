@@ -374,8 +374,6 @@ def main():
     if section_length == None:
         section_length = 30
 
-
-    
     if INPUT_FILE == None:
         print("[!]No Input File Supplied!\n")
         print(parser.usage)

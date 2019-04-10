@@ -251,7 +251,8 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_
                 snippets_to_complete -= thread_count
                 snippets_completed += thread_count
 
-def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split, keep_wav):
+def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav):
+    start_time = time.time()
     FILENAME = stripExtension(INPUT_FILE, script_path)
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
     check_required = False
@@ -321,18 +322,81 @@ def runOperations(INPUT_FILE, script_path, start_time, thread_count, section_len
     run_time = runTime(start_time)
     print('[!]Entire job took: ' + run_time)
     print("-------------------------------")
-    
-def main():
-    """This just processes user input & options and passes it to runOperations()"""
+
+def assistedOperations(script_path):
+    print("    --- Assisted Mode ---")
+    print("-------------------------------")
+    #List Files
+    supported_files = ['.wav', '.m4a', '.mp3', '.mp4']
+    files_list = []
+    for file_type in supported_files:
+        for file in os.listdir(script_path):
+            if file.endswith(file_type):
+                files_list.append(file)
+    files_list.sort()
+    while True:
+        try:
+            print("Listing compatible files:")
+            item_number = 0
+            for item in files_list:
+                item_number += 1
+                print(" " + str(item_number) + "- " + str(item))
+            selection = int(input("Please select a file: "))
+            INPUT_FILE = files_list[selection-1]
+            INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
+            break
+        except:
+            print("\nPlease make a valid selection!")
+            time.sleep(3)
+    #Sections/No Split
+    try:
+        print("\nSplitting Options:")
+        print(" Define in seconds how long the sections should be cut into.")
+        print(" 30 seconds or smaller is recommended as bigger can have errors.")
+        print(" ie: 30, 60, 90 etc. 0 for No Splitting (NOT RECOMMENDED) ")
+        section_length = abs(int(input("Please input a section length for splitting: ")))
+        if section_length == 0:
+            no_split = True
+        else:
+            no_split = False
+    except:
+        section_length = 30
+        no_split = False
+    #Threads
+    try:
+        print("\nThreads Option:")
+        print(" Running multiple threads is for multitasking the processing of")
+        print(" audio snippets. Default is 10")
+        thread_count = abs(int(input("How many threads would you like to use?: ")))
+    except:
+        thread_count = 10
+    #Keep Wav
+    if '.wav' not in INPUT_FILE:
+        selection = input("Would you like to keep the converted wav file? y/N: ")
+        if selection.lower() == 'y':
+            keep_wav = True
+        else:
+            keep_wav = False
+    #Review
+    print("\n")
+    printTitle()
+    runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav)
+
+def printTitle():
     VERSION = 1.0
     print("-------------------------------")
     print("    Audio Transcriber - v" + str(VERSION))
-    print("-------------------------------")   
+    print("-------------------------------")
+    
+def main():
+    """This just processes user input & options and passes it to runOperations()"""
+    printTitle()
 
     parser = optparse.OptionParser('Options: '+\
                                    '\n -h --help <show this help message and exit>' +\
                                    '\n -f --file <target file> (REQUIRED)' +\
                                    '\n -t --threads <threads to use> (10 Default)' +\
+                                   '\n -a --assisted <assisted mode>' +\
                                    '\n\nSplitting Options: ' +\
                                    '\n -s --section <Length of splitting sections> (In Seconds)' +\
                                    '\n -n --nosplit <Specify no splitting of input file> (Not Recommended)')
@@ -344,6 +408,10 @@ def main():
     parser.add_option('-t', '--threads',
                       action='store', dest='threads', type='int',\
                       help='specify amount of threads to use')
+
+    parser.add_option('-a', '--assisted',
+                      action='store_true', dest='assisted', default=False,\
+                      help='Assisted mode for easy operation')
 
     parser.add_option('-s', '--section',
                       action='store', dest='section_length', type='int',\
@@ -359,38 +427,41 @@ def main():
     
     (options, args) = parser.parse_args()
 
-    start_time = time.time()
     script_path = os.path.abspath(os.path.dirname(sys.argv[0]))    
 
     INPUT_FILE = options.filename
     thread_count = options.threads
+    ASSISTED = options.assisted
     section_length = options.section_length
     no_split = options.nosplit
     keep_wav = options.keep
-    
-    if thread_count == None:
-        thread_count = 10
 
-    if section_length == None:
-        section_length = 30
-
-    if INPUT_FILE == None:
-        print("[!]No Input File Supplied!\n")
-        print(parser.usage)
-        exit
-    else:  
-        while True:
-            if os.path.isfile("/" + str(INPUT_FILE)) == True:
-                INPUT_FILE = str(INPUT_FILE)
-                break
-            elif os.path.isfile(script_path + "\\" + str(INPUT_FILE)) == True:
-                INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
-                break
-            else:
-                print("[!]ERROR: Cannot find specified file!")
-                break
-                exit
-        runOperations(INPUT_FILE, script_path, start_time, thread_count, section_length, no_split, keep_wav)
+    if ASSISTED == True:
+        assistedOperations(script_path)
+    else:
+        if thread_count == None:
+            thread_count = 10
     
+        if section_length == None:
+            section_length = 30
+    
+        if INPUT_FILE == None:
+            print("[!]No Input File Supplied!\n")
+            print(parser.usage)
+            return
+        else:  
+            while True:
+                if os.path.isfile("/" + str(INPUT_FILE)) == True:
+                    INPUT_FILE = str(INPUT_FILE)
+                    break
+                elif os.path.isfile(script_path + "\\" + str(INPUT_FILE)) == True:
+                    INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
+                    break
+                else:
+                    print("[!]ERROR: Cannot find specified file!")
+                    break
+                    exit
+            runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav)
+        
 if __name__ == '__main__':
     main()

@@ -120,6 +120,11 @@ def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
     return AUDIO_OUTPUT_FILE
 
 def soundCheck(INPUT_FILE, AUDIO_OUTPUT_FILE):    
+    """There can be a delay to outputting the converted file,
+    this loop checks the file sizes before continuing. Since wav format
+    is less compressed than most other formats its ouput size will be greater
+    than the input file's. It outputs data rather quickly onces it start so
+    the loop can break when it exceeds the inputs"""
     completed = False
     sound_size = os.path.getsize(INPUT_FILE)
     new_sound_size = os.path.getsize(AUDIO_OUTPUT_FILE)
@@ -168,8 +173,6 @@ def createOutput(FILENAME, output_list, script_path):
     f.close()
     
 def checkSuccess(total_snippets, TEMP_FILE):
-    """There is a delay in outputing transcription to file this loop runs until
-    all the transcription lines are completed"""
     print("[+]Writing transcription to file...")
     line_count = 0
     while True:
@@ -186,7 +189,6 @@ def checkSuccess(total_snippets, TEMP_FILE):
     return completed_string
 
 def writeOutput(TEMP_FILE, FILENAME, script_path):
-    """Takes the temp file and organizes it and writes to the output file"""
     output_list = []
     with open(TEMP_FILE, "r") as f:
         for line in f:
@@ -194,8 +196,7 @@ def writeOutput(TEMP_FILE, FILENAME, script_path):
     output_list.sort()
     createOutput(FILENAME, output_list, script_path)
 
-def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, single_file=False):
-    """Transcribes the audio input file/snippets and writes to a temp file"""
+def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, section_length, single_file=False):
     if single_file == True:
         try:
             r = sr.Recognizer()
@@ -207,30 +208,41 @@ def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, single
             text_string = "!!!ERROR processing audio!!!"
     elif single_file == False:
         try:
-            dummy_diff = len(str(int(total_snippets)))-len(str(line_count))
-            dummy_zeros = dummy_diff*str(0)
-            line_count = str(dummy_zeros)+str(line_count)        
+            total_time_output = line_count*section_length
+            output_minutes = int(total_time_output//60)
+            output_seconds = int(total_time_output)
+            if output_minutes >= 1:
+                for minute in range(output_minutes):
+                    output_seconds -= 60
+            output_milliseconds = 0
+            if len(str(output_minutes)) != 2:
+                output_minutes = str(0)+str(output_minutes)
+            if len(str(output_seconds)) != 2:
+                output_seconds = str(0)+str(output_seconds)
+            if len(str(output_milliseconds)) != 2:
+                output_milliseconds = str(0)+str(output_milliseconds)
+            time_string = (str(output_minutes) + ":" + str(output_seconds) + ":" + str(output_milliseconds))            
+            
             r = sr.Recognizer()
             with sr.AudioFile(snippet) as source:
                 audio = r.record(source)        
                 text = r.recognize_google(audio)
-                text_string = str(line_count + "- " + text)
+                text_string = str(time_string + "- " + text)
         except:
-            text_string = str(line_count) + "- !!!ERROR processing audio!!!"
+            text_string = str(time_string) + "- !!!ERROR processing audio!!!"
     with open(TEMP_FILE, "a") as f:
         f.write(text_string + "\n")
     f.close()
     pbar.update(1)
 
-def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=False):
-    """Main function to run transcription operation"""
+def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, section_length, single_file=False):
     pbar_total = total_snippets
     working_list =[] 
     if single_file == True:
             with tqdm(total=pbar_total, leave=True, desc="[+]Transcribing audio file") as pbar:
                 working_list.append(split_wav[0])
                 for snippet in working_list:
-                    transcribeAudio(snippet, None, TEMP_FILE, total_snippets, pbar, single_file=True)
+                    transcribeAudio(snippet, None, TEMP_FILE, total_snippets, pbar, section_length, single_file=True)
     elif single_file == False:
         line_count = 0
         snippets_to_complete = total_snippets
@@ -246,17 +258,21 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_
                 with concurrent.futures.ThreadPoolExecutor(max_workers=thread_count) as executor:
                     for snippet in working_list:
                         line_count += 1
-                        executor.submit(transcribeAudio, snippet, line_count, TEMP_FILE, total_snippets, pbar,)
+                        executor.submit(transcribeAudio, snippet, line_count, TEMP_FILE, total_snippets, pbar, section_length, single_file=False,)
                 working_list.clear()
                 snippets_to_complete -= thread_count
                 snippets_completed += thread_count
 
 def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav):
-    """All the main functions & operations are run from this function."""
     start_time = time.time()
     FILENAME = stripExtension(INPUT_FILE, script_path)
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
     check_required = False
+    
+    if keep_wav == False:
+        DELETE_WAV = True
+    elif keep_wav == True:
+        DELETE_WAV = False
 
     FILE_TYPE = fileType(INPUT_FILE)           
     if FILE_TYPE == None or FILE_TYPE == 'Unsupported':
@@ -272,6 +288,7 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
         check_required = True
     elif FILE_TYPE == 'wav':
         print("[+]No file conversion needed!")
+        DELETE_WAV = False
         new_sound = AudioSegment.from_wav(INPUT_FILE)
 
     if check_required == True:
@@ -298,17 +315,17 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
     split_wav, total_snippets = getSnippets(script_path)
     
     if total_snippets == 1:
-        runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=True)
+        runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, section_length, single_file=True)
     else:
-        runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets)
+        runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, section_length, single_file=False)
     success = checkSuccess(total_snippets, TEMP_FILE)
     print(success)
 
     writeOutput(TEMP_FILE, FILENAME, script_path)
     
-    if keep_wav == True:
+    if DELETE_WAV == False:
         cleanUp(script_path, None)
-    elif keep_wav == False: 
+    elif DELETE_WAV == True: 
         cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
 
     print("-------------------------------")
@@ -319,7 +336,6 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
     print("-------------------------------")
 
 def assistedOperations(script_path):
-    """A prompt user input mode"""
     print("    --- Assisted Mode ---")
     print("-------------------------------")
     #List Files
@@ -461,6 +477,6 @@ def main():
                     break
                     exit
             runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav)
-
+        
 if __name__ == '__main__':
     main()

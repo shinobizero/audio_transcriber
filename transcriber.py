@@ -102,7 +102,9 @@ def calculateSections(FILENAME, section_length, new_sound):
     return sections
 
 def extractAudio(FILE_TYPE, FILENAME, script_path):
-    AUDIO_OUTPUT_FILE = FILENAME + ".wav"
+    AUDIO_OUTPUT_FILE = FILENAME + "-EXTRACTED.wav"
+    if os.path.isfile(script_path + '/' + AUDIO_OUTPUT_FILE) == True:
+        os.remove(script_path + '/' + AUDIO_OUTPUT_FILE)
     command = str("ffmpeg -i " + script_path + "/" + FILENAME + "." + FILE_TYPE +" -f wav -vn -ab 192000 " + script_path + "/" + AUDIO_OUTPUT_FILE)  
     subprocess.call(command, shell=True)
     return AUDIO_OUTPUT_FILE
@@ -112,11 +114,9 @@ def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
     if FILE_TYPE == 'mp3':
         sound = AudioSegment.from_mp3(INPUT_FILE)
     elif FILE_TYPE == 'm4a':
-        sound = AudioSegment.from_file(INPUT_FILE, "m4a")
-    
-    AUDIO_OUTPUT_FILE = FILENAME + ".wav"    
-    sound.export(AUDIO_OUTPUT_FILE, format="wav")
-    
+        sound = AudioSegment.from_file(INPUT_FILE, "m4a")    
+    AUDIO_OUTPUT_FILE = FILENAME + "-CONVERTED.wav"    
+    sound.export(AUDIO_OUTPUT_FILE, format="wav")   
     return AUDIO_OUTPUT_FILE
 
 def soundCheck(INPUT_FILE, AUDIO_OUTPUT_FILE):    

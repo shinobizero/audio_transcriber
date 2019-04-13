@@ -2,6 +2,7 @@
 
 import os
 import sys
+from sys import exit
 import time
 import shutil
 import optparse
@@ -12,6 +13,7 @@ import concurrent.futures
 from tqdm import tqdm
 import speech_recognition as sr
 from pydub import AudioSegment
+from pydub.silence import detect_silence
 
 def runTime(start_time):
     """Returns a formatted string of total duration time"""
@@ -40,10 +42,10 @@ def cleanUp(script_path, FILENAME, DELETE_CONVERT=False):
             os.remove(script_path + '/' + FILENAME + "-EXTRACTED.wav")
         elif os.path.isfile(script_path + '/' + FILENAME + "-CONVERTED.wav") == True and DELETE_CONVERT == True:
             os.remove(script_path + '/' + FILENAME + "-CONVERTED.wav")
-    
-def makeTemp(script_path, TEMP_FILE):
-    if not os.path.exists(script_path + '\\temp'):
-        os.mkdir(script_path + '\\temp')
+
+def makeTemp(TEMP_DIR):
+    if not os.path.exists(TEMP_DIR):
+        os.mkdir(TEMP_DIR)
    
 def stripExtension(INPUT_FILE, script_path):
     """
@@ -113,21 +115,6 @@ def fileType(INPUT_FILE):
             FILE_TYPE = 'Unsupported'
     return FILE_TYPE
 
-def calculateSections(FILENAME, section_length, new_sound):
-    """
-    Calculates how many sections required for splitting
-    """
-    sound = new_sound
-    duration = (len(sound)+1)/1000
-    if duration < section_length:
-        sections = 1
-    else:
-        if duration % section_length == 0:
-            sections = duration/section_length
-        else:
-            sections = duration//section_length+1
-    return sections
-
 def extractAudio(FILE_TYPE, FILENAME, script_path):
     """
     Extracts audio from a video file
@@ -159,41 +146,94 @@ def soundCheck(INPUT_FILE, AUDIO_OUTPUT_FILE):
         completed = True
     return completed
 
-def audioSplitter(FILENAME, sections, section_length, script_path, new_sound):
-    if sections == 1:
-        print("[+]No file splitting!")
-        sound_file = script_path + '/' + FILENAME + '.wav'
-        new_sound_file = script_path + '/temp/' + FILENAME + '.wav'
-        shutil.copyfile(sound_file, new_sound_file)
-    else:
-        section = section_length * 1000
-        start = 0
-        stop = start + section
-        section_count = 0
-        print("[+]Splitting audio file...")
-        while section_count < sections:
-            section_count += 1
-            dummy_diff = len(str(int(sections)))-len(str(section_count))
-            dummy_zeros = dummy_diff*str(0)
-            stop = start + section               
-            sound = new_sound[start:stop]
-            output_name = script_path + "/temp/" + FILENAME + "-" + str(dummy_zeros) + str(section_count) + ".wav"
-            sound.export(output_name, format="wav")
-            start = stop
-
-def getSnippets(script_path):
+def getSnippets(TEMP_DIR):
     """
     Makes a list of all audio snippets in the temp directory
     """
     split_wav = []
-    for file in os.listdir(script_path + "\\temp"):
+    for file in os.listdir(TEMP_DIR):
         if file.endswith(".wav"):
-            file_string = script_path + "\\temp\\" + file
+            file_string = TEMP_DIR + "\\" + file
             split_wav.append(file_string)
     total_snippets = len(split_wav)
     return split_wav, total_snippets
 
-def createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_length):
+def detectSilence(sound, ESTIMATED_SECTIONS):
+    min_silence_len = 200
+    
+    print("[+]Detecting silence sections...")
+    while True:
+        silences = detect_silence(sound, min_silence_len, silence_thresh=-16, seek_step=1)    
+        if len(silences) < ESTIMATED_SECTIONS:
+            if min_silence_len == 200:
+                min_silence_len = min_silence_len-50
+            silences.clear()
+        elif len(silences) >= ESTIMATED_SECTIONS:
+            silence_found = True
+            break
+        if min_silence_len < 100:
+            silence_found = False
+            silences.clear()
+            break
+    if silence_found == True:
+        silence_ranges = []
+        for section in silences:
+            silence_start = ''
+            silence_end = ''
+            silence = str(section)
+            silence = silence.replace("[", "")
+            silence = silence.replace("]", "")
+            silence = silence.replace(",", "")
+            section_end = False
+            for char in silence:
+                if char != ' ' and section_end == False:
+                    silence_start = silence_start + char
+                elif char != ' ' and section_end == True:
+                    silence_end = silence_end + char
+                elif char == ' ':
+                    section_end = True
+            silence_ranges.append(int(silence_start))
+            silence_ranges.append(int(silence_end))
+
+    return silence_found, silence_ranges
+
+def audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, total_sections=0, silence_split=False):
+    if silence_split == False:
+        if duration % recommended_section_length == 0:
+            sections = duration/recommended_section_length
+        else:
+            sections = duration//recommended_section_length+1
+        start = 0
+        section = recommended_section_length * 1000
+        print(" [!]Splitting into " + str(int(sections)) + " sections")
+    elif silence_split == True:
+        sections = total_sections
+    sections_processed = 0
+    section_ends = []
+    print("[+]Splitting audio file...")
+    while sections_processed != sections:
+        section_number = sections_processed+1
+        dummy_diff = len(str(int(sections)))-len(str(section_number))
+        dummy_zeros = dummy_diff*str(0)
+        output_name = TEMP_DIR + "/" + FILENAME + "-" + str(dummy_zeros) + str(section_number) + ".wav"
+        if silence_split == True:
+            start = range_list[0]
+            stop = range_list[1]
+        elif silence_split == False:
+            stop = start + section
+        sound = new_sound[start:stop]
+        sound.export(output_name, format="wav")   
+        if silence_split == True:
+            section_ends.append(range_list[1])
+            del range_list[1]
+            del range_list[0]
+        elif silence_split == False:
+            section_ends.append(stop)
+            start = stop
+        sections_processed += 1
+    return section_ends
+            
+def createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_ends):
     OUTPUT_LIST = []
     TIMESTAMP = str(datetime.datetime.strftime(datetime.datetime.today() , '%Y%m%d-%H%M'))
     OUTPUT_FILENAME = FILENAME + "-" + TIMESTAMP + ".txt"
@@ -207,13 +247,16 @@ def createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_lengt
             dummy_zeros = dummy_diff*str(0)
             string_line_count = str(dummy_zeros)+str(line_count)+"-"
             
-            total_time_output = line_count*section_length
-            output_minutes = int(total_time_output//60)
-            output_seconds = int(total_time_output)
+            total_time_output = section_ends[0]
+            output_minutes = int(total_time_output//60000)
             if output_minutes >= 1:
                 for minute in range(output_minutes):
-                    output_seconds -= 60
-            output_milliseconds = 0
+                    total_time_output -= 60000
+            output_seconds = int(total_time_output)//1000
+            if output_seconds >= 1:
+                for second in range(output_seconds):
+                    total_time_output -= 1000
+            output_milliseconds = total_time_output
             if len(str(output_minutes)) != 2:
                 output_minutes = str(0)+str(output_minutes)
             if len(str(output_seconds)) != 2:
@@ -221,14 +264,16 @@ def createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_lengt
             if len(str(output_milliseconds)) != 2:
                 output_milliseconds = str(0)+str(output_milliseconds)
             time_string = (str(output_minutes) + ":" + str(output_seconds) + ":" + str(output_milliseconds) + "-")
+
             new_line = line.replace(string_line_count, time_string)
-            OUTPUT_LIST.append(new_line)       
+            OUTPUT_LIST.append(new_line)
+            del section_ends[0]
     temp.close()
     with open(script_path + "/" + OUTPUT_FILENAME, "a") as f:
         for line in OUTPUT_LIST:   
             f.write(line)
     f.close()
-    
+
 def checkSuccess(total_snippets, TEMP_FILE):
     """
     There is a delay in outputing transcription to file this loop runs until
@@ -260,11 +305,12 @@ def organizeTemp(TEMP_FILE, script_path):
         for line in output_list:
             temp.write(line)
     temp.close()
-              
+
 def transcribe(snippet):
     try:
         r = sr.Recognizer()
         with sr.AudioFile(snippet) as source:
+            r.adjust_for_ambient_noise(source)
             audio = r.record(source)        
             text = r.recognize_google(audio)
             text_string = text
@@ -317,19 +363,15 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_
                 snippets_to_complete -= thread_count
                 snippets_completed += thread_count
 
-def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav):
+def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detection):
     """All the main functions & operations are run from this function."""
     if thread_count == None:
         thread_count = 10
-    
-    if section_length == None:
-        section_length = 30
-    elif section_length < 1:
-        section_length = 1    
 
     start_time = time.time()
     FILENAME = stripExtension(INPUT_FILE, script_path)
-    TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
+    TEMP_DIR = script_path + '\\temp'
+    TEMP_FILE = TEMP_DIR + '\\' + FILENAME + '-TEMP.txt'
     check_required = False
 
     FILE_TYPE = fileType(INPUT_FILE)           
@@ -364,25 +406,41 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
         new_sound = AudioSegment.from_wav(AUDIO_OUTPUT_FILE)
 
     cleanUp(script_path, None)
-    makeTemp(script_path,TEMP_FILE)
+    makeTemp(TEMP_DIR)
+    
+    recommended_section_length = 30
+    duration = (len(new_sound)+1)/1000
+    
+    if duration < recommended_section_length:
+        new_sound_file = TEMP_DIR + '/' + new_sound
+        shutil.copyfile(new_sound, new_sound_file)
+    else:
+        if silence_detection == True:
+            ESTIMATED_SECTIONS = duration//recommended_section_length+1
+            SILENCE_DETECTED, range_list = detectSilence(new_sound, ESTIMATED_SECTIONS)
+            if SILENCE_DETECTED == True:
+                silences_found = int(len(range_list)/2)
+                print(" [!]Found " + str(silences_found) + " silence sections")
+                section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, silences_found, silence_split=True)
+            else:
+                print(" [!]No suitable silence sections found")
+                silence_detection = False
+    if silence_detection == False:
+        section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, None)
 
-    if no_split == False:
-        sections = calculateSections(FILENAME, section_length, new_sound)
-    elif no_split == True:
-        sections = 1
-
-    audioSplitter(FILENAME, sections, section_length, script_path, new_sound)  
-    split_wav, total_snippets = getSnippets(script_path)
+        
+    split_wav, total_snippets = getSnippets(TEMP_DIR)
     
     if total_snippets == 1:
         runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=True)
     else:
         runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets)
+        
     checkSuccess(total_snippets, TEMP_FILE)
-    organizeTemp(TEMP_FILE, script_path)
-    
+    organizeTemp(TEMP_FILE, script_path)    
+
     print("[!]Transcription successful")
-    createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_length)
+    createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_ends)
     
     if keep_wav == True:
         cleanUp(script_path, None)
@@ -396,67 +454,8 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
     print('[!]Entire job took: ' + run_time)
     print("-------------------------------")
 
-def assistedOperations(script_path):
-    """A prompt user input mode"""
-    print("    --- Assisted Mode ---")
-    print("-------------------------------")
-    #List Files
-    supported_files = ['.wav', '.m4a', '.mp3', '.mp4', 'mkv', 'avi', 'mpg', 'mpeg']
-    files_list = []
-    for file_type in supported_files:
-        for file in os.listdir(script_path):
-            if file.endswith(file_type):
-                files_list.append(file)
-    files_list.sort()
-    while True:
-        try:
-            print("Listing compatible files:")
-            item_number = 0
-            for item in files_list:
-                item_number += 1
-                print(" " + str(item_number) + "- " + str(item))
-            selection = int(input("Please select a file: "))
-            INPUT_FILE = files_list[selection-1]
-            INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
-            break
-        except:
-            print("\nPlease make a valid selection!")
-            time.sleep(3)
-    #Sections/No Split
-    try:
-        print("\nSplitting Options:")
-        print(" Define in seconds how long the sections should be cut into.")
-        print(" 30 seconds or smaller is recommended as bigger can have errors.")
-        print(" ie: 30, 60, 90 etc. 0 for No Splitting (NOT RECOMMENDED) ")
-        section_length = abs(int(input("Please input a section length for splitting: ")))
-        if section_length == 0:
-            no_split = True
-        else:
-            no_split = False
-    except:
-        no_split = False
-    #Threads
-    try:
-        print("\nThreads Option:")
-        print(" Running multiple threads is for multitasking the processing of")
-        print(" audio snippets. Default is 10")
-        thread_count = abs(int(input("How many threads would you like to use?: ")))
-    except:
-        thread_count = None
-    #Keep Wav
-    if '.wav' not in INPUT_FILE:
-        selection = input("Would you like to keep the converted wav file? y/N: ")
-        if selection.lower() == 'y':
-            keep_wav = True
-        else:
-            keep_wav = False
-    #Review
-    print("\n")
-    printTitle()
-    runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav)
-
 def printTitle():
-    VERSION = 1.0
+    VERSION = 2.0
     print("-------------------------------")
     print("    Audio Transcriber - v" + str(VERSION))
     print("-------------------------------")
@@ -469,10 +468,9 @@ def main():
                                    '\n -h --help <show this help message and exit>' +\
                                    '\n -f --file <target file> (REQUIRED)' +\
                                    '\n -t --threads <threads to use> (10 Default)' +\
-                                   '\n -a --assisted <assisted mode>' +\
-                                   '\n\nSplitting Options: ' +\
-                                   '\n -s --section <Length of splitting sections> (In Seconds)' +\
-                                   '\n -n --nosplit <Specify no splitting of input file> (Not Recommended)')
+                                   '\n -k --keep <keep converted/extracted wav file>' +\
+                                   '\n Splitting Options:' +\
+                                   '\n -s --silence <silence splitting>' )
 
     parser.add_option('-f', '--file',
                       action='store', dest='filename', type='string',\
@@ -481,55 +479,41 @@ def main():
     parser.add_option('-t', '--threads',
                       action='store', dest='threads', type='int',\
                       help='specify amount of threads to use')
-
-    parser.add_option('-a', '--assisted',
-                      action='store_true', dest='assisted', default=False,\
-                      help='Assisted mode for easy operation')
-
-    parser.add_option('-s', '--section',
-                      action='store', dest='section_length', type='int',\
-                      help='specify length of sections for splitting')
-
-    parser.add_option('-n', '--nosplit',
-                      action='store_true', dest='nosplit', default=False,\
-                      help='Specify no splitting of input file')
     
     parser.add_option('-k', '--keep',
                       action='store_true', dest='keep', default=False,\
                       help='Keep wav file, if converting')
+
+    parser.add_option('-s', '--silence',
+                      action='store_true', dest='silence', default=False,\
+                      help='Will use silence detection & splitting')
     
     (options, args) = parser.parse_args()
 
     script_path = os.path.abspath(os.path.dirname(sys.argv[0]))    
 
-    ASSISTED = options.assisted
-
-    if ASSISTED == True:
-        assistedOperations(script_path)
-    else:
-        INPUT_FILE = options.filename
-        thread_count = options.threads
-        section_length = options.section_length
-        no_split = options.nosplit
-        keep_wav = options.keep
+    INPUT_FILE = options.filename
+    thread_count = options.threads
+    keep_wav = options.keep
+    silence_detection = options.silence
     
-        if INPUT_FILE == None:
-            print("[!]No Input File Supplied!\n")
-            print(parser.usage)
-            return
-        else:  
-            while True:
-                if os.path.isfile("/" + str(INPUT_FILE)) == True:
-                    INPUT_FILE = str(INPUT_FILE)
-                    break
-                elif os.path.isfile(script_path + "\\" + str(INPUT_FILE)) == True:
-                    INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
-                    break
-                else:
-                    print("[!]ERROR: Cannot find specified file!")
-                    break
-                    exit
-            runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav)
+    if INPUT_FILE == None:
+        print("[!]No Input File Supplied!\n")
+        print(parser.usage)
+        exit
+    else:  
+        while True:
+            if os.path.isfile("/" + str(INPUT_FILE)) == True:
+                INPUT_FILE = str(INPUT_FILE)
+                break
+            elif os.path.isfile(script_path + "\\" + str(INPUT_FILE)) == True:
+                INPUT_FILE = str(script_path + "\\" + INPUT_FILE)
+                break
+            else:
+                print("[!]ERROR: Cannot find specified file!")
+                break
+                exit
+    runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detection)
 
 if __name__ == '__main__':
     main()

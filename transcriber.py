@@ -158,44 +158,36 @@ def getSnippets(TEMP_DIR):
     total_snippets = len(split_wav)
     return split_wav, total_snippets
 
-def detectSilence(sound, ESTIMATED_SECTIONS):
-    min_silence_len = 200
-    
-    print("[+]Detecting silence sections...")
-    while True:
-        silences = detect_silence(sound, min_silence_len, silence_thresh=-16, seek_step=1)    
-        if len(silences) < ESTIMATED_SECTIONS:
-            if min_silence_len == 200:
-                min_silence_len = min_silence_len-50
-            silences.clear()
-        elif len(silences) >= ESTIMATED_SECTIONS:
-            silence_found = True
-            break
-        if min_silence_len < 100:
-            silence_found = False
-            silences.clear()
-            break
-    if silence_found == True:
-        silence_ranges = []
-        for section in silences:
-            silence_start = ''
-            silence_end = ''
-            silence = str(section)
-            silence = silence.replace("[", "")
-            silence = silence.replace("]", "")
-            silence = silence.replace(",", "")
-            section_end = False
-            for char in silence:
-                if char != ' ' and section_end == False:
-                    silence_start = silence_start + char
-                elif char != ' ' and section_end == True:
-                    silence_end = silence_end + char
-                elif char == ' ':
-                    section_end = True
-            silence_ranges.append(int(silence_start))
-            silence_ranges.append(int(silence_end))
+def detectSilence(sound, ESTIMATED_SECTIONS, min_silence_len):
+    silences = detect_silence(sound, min_silence_len, silence_thresh=-16, seek_step=1)    
+    if len(silences) < ESTIMATED_SECTIONS:
+        silence_found = False
+        silences.clear()
+    elif len(silences) >= ESTIMATED_SECTIONS:
+        silence_found = True
+    return silence_found, silences
 
-    return silence_found, silence_ranges
+def silenceRanges(silence_ranges):
+    range_list = []
+    for section in silence_ranges:
+        silence_start = ''
+        silence_end = ''
+        silence = str(section)
+        silence = silence.replace("[", "")
+        silence = silence.replace("]", "")
+        silence = silence.replace(",", "")
+        section_end = False
+        for char in silence:
+            if char != ' ' and section_end == False:
+                silence_start = silence_start + char
+            elif char != ' ' and section_end == True:
+                silence_end = silence_end + char
+            elif char == ' ':
+                section_end = True
+            range_list.append(int(silence_start))
+            range_list.append(int(silence_end))
+
+    return range_list
 
 def audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, total_sections=0, silence_split=False):
     if silence_split == False:
@@ -417,18 +409,34 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     else:
         if silence_detection == True:
             ESTIMATED_SECTIONS = duration//recommended_section_length+1
-            SILENCE_DETECTED, range_list = detectSilence(new_sound, ESTIMATED_SECTIONS)
+            min_silence_len = 1000
+            print("[+]Detecting silence sections...")
+            while True:
+                silence_found, silence_ranges = detectSilence(new_sound, ESTIMATED_SECTIONS, min_silence_len)
+                if silence_found == False:
+                    if min_silence_len == 1000:
+                        min_silence_len = min_silence_len//2
+                    elif min_silence_len <= 500 and min_silence_len > 200:
+                        min_silence_len = min_silence_len -100
+                    elif min_silence_len <= 200 and min_silence_len > 100:
+                        min_silence_len = min_silence_len -50
+                    elif min_silence_len == 100:
+                        SILENCE_DETECTED = False
+                        break
+                if silence_found == True:
+                    SILENCE_DETECTED = True
+                    break           
             if SILENCE_DETECTED == True:
-                silences_found = int(len(range_list)/2)
+                silences_found = int(len(silence_ranges))
                 print(" [!]Found " + str(silences_found) + " silence sections")
+                range_list = silenceRanges(silence_ranges)
                 section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, silences_found, silence_split=True)
             else:
                 print(" [!]No suitable silence sections found")
                 silence_detection = False
     if silence_detection == False:
         section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, None)
-
-        
+      
     split_wav, total_snippets = getSnippets(TEMP_DIR)
     
     if total_snippets == 1:

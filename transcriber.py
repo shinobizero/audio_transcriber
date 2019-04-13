@@ -181,7 +181,6 @@ def silenceRanges(silence_ranges, silences_found):
         range_list.append(silence_end)
         del silence_ranges[0]
         items_processed += 1
-    print(range_list)
     return range_list
 
 def audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, total_sections=0, silence_split=False):

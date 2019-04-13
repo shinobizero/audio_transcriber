@@ -42,6 +42,9 @@ def cleanUp(script_path, FILENAME, DELETE_CONVERT=False):
             os.remove(script_path + '/' + FILENAME + "-CONVERTED.wav")
     
 def makeTemp(script_path, TEMP_FILE):
+    """
+    Makes a temporary directory
+    """
     if not os.path.exists(script_path + '\\temp'):
         os.mkdir(script_path + '\\temp')
     with open(TEMP_FILE, "w+") as file:
@@ -49,6 +52,9 @@ def makeTemp(script_path, TEMP_FILE):
     file.close()
    
 def stripExtension(INPUT_FILE, script_path):
+    """
+    Strips extension from filename
+    """
     if '.mp3' in INPUT_FILE:
         FILENAME = INPUT_FILE.replace(".mp3", "")
     elif '.wav' in INPUT_FILE:
@@ -57,6 +63,14 @@ def stripExtension(INPUT_FILE, script_path):
         FILENAME = INPUT_FILE.replace(".m4a", "")
     elif '.mp4' in INPUT_FILE:
         FILENAME = INPUT_FILE.replace(".mp4", "")
+    elif '.mkv' in INPUT_FILE:
+        FILENAME = INPUT_FILE.replace(".mkv", "")
+    elif '.mpg' in INPUT_FILE:
+        FILENAME = INPUT_FILE.replace(".mpg", "")
+    elif '.avi' in INPUT_FILE:
+        FILENAME = INPUT_FILE.replace(".avi", "")
+    elif '.mpeg' in INPUT_FILE:
+        FILENAME = INPUT_FILE.replace(".mpeg", "")
     else:
         FILENAME = INPUT_FILE
     FILENAME = FILENAME.replace(script_path, "")
@@ -64,9 +78,11 @@ def stripExtension(INPUT_FILE, script_path):
     return FILENAME
 
 def fileType(INPUT_FILE):
-    """Determines file type of the input file, if it can't find it
+    """
+    Determines file type of the input file, if it can't find it
     by using file type module, if that fails it will attempt to use the file's
-    extension, if it has one"""
+    extension, if it has one
+    """
     kind = filetype.guess(INPUT_FILE)
     if kind is None:
         FILE_TYPE = None
@@ -78,6 +94,12 @@ def fileType(INPUT_FILE):
         FILE_TYPE = kind.extension
     elif kind.extension == 'mp4' and kind.mime == 'video/mp4':
         FILE_TYPE = kind.extension
+    elif kind.extension == 'mkv' and kind.mime == 'video/x-matroska':
+        FILE_TYPE = kind.extension
+    elif kind.extension == 'mpg' and kind.mime == 'video/mpeg':
+        FILE_TYPE = kind.extension
+    elif kind.extension == 'avi' and kind.mime == 'video/x-msvideo':
+        FILE_TYPE = kind.extension
     if FILE_TYPE == None:
         if ".mp3" in INPUT_FILE:
             FILE_TYPE = 'mp3'
@@ -87,11 +109,20 @@ def fileType(INPUT_FILE):
             FILE_TYPE = 'wav'
         elif ".mp4" in INPUT_FILE:
             FILE_TYPE = 'mp4'
+        elif ".mkv" in INPUT_FILE:
+            FILE_TYPE = 'mkv'
+        elif ".mpg" in INPUT_FILE or ".mpeg" in INPUT_FILE:
+            FILE_TYPE = 'mpg'
+        elif ".avi" in INPUT_FILE:
+            FILE_TYPE = 'avi'
         else:
             FILE_TYPE = 'Unsupported'
     return FILE_TYPE
 
 def calculateSections(FILENAME, section_length, new_sound):
+    """
+    Calculates how many sections required for splitting
+    """
     sound = new_sound
     duration = (len(sound)+1)/1000
     if duration < section_length:
@@ -104,6 +135,9 @@ def calculateSections(FILENAME, section_length, new_sound):
     return sections
 
 def extractAudio(FILE_TYPE, FILENAME, script_path):
+    """
+    Extracts audio from a video file
+    """
     AUDIO_OUTPUT_FILE = FILENAME + "-EXTRACTED.wav"
     if os.path.isfile(script_path + '/' + AUDIO_OUTPUT_FILE) == True:
         os.remove(script_path + '/' + AUDIO_OUTPUT_FILE)
@@ -112,7 +146,9 @@ def extractAudio(FILE_TYPE, FILENAME, script_path):
     return AUDIO_OUTPUT_FILE
 
 def convertWAV(INPUT_FILE, FILE_TYPE, FILENAME):
-    """Converts the input file to wav format """
+    """
+    Converts the input file to wav format 
+    """
     if FILE_TYPE == 'mp3':
         sound = AudioSegment.from_mp3(INPUT_FILE)
     elif FILE_TYPE == 'm4a':
@@ -157,7 +193,9 @@ def audioSplitter(FILENAME, sections, section_length, script_path, new_sound):
             start = stop
 
 def getSnippets(script_path):
-    """Makes a list of all audio snippets in the temp directory"""
+    """
+    Makes a list of all audio snippets in the temp directory
+    """
     split_wav = []
     for file in os.listdir(script_path + "\\temp"):
         if file.endswith(".wav"):
@@ -184,9 +222,8 @@ def checkSuccess(total_snippets, TEMP_FILE):
             for line in f:
                 line_count += 1
         if int(line_count) == int(total_snippets):
-            f.close
             break
-        f.close()
+    f.close()
     completed_string = " [!]Transcription Successful!"
     return completed_string
 
@@ -283,7 +320,7 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
     if FILE_TYPE == None or FILE_TYPE == 'Unsupported':
         print("[!]ERROR: Unsupported File Type!!!")
         return
-    elif FILE_TYPE == 'mp4':
+    elif FILE_TYPE == 'mp4' or FILE_TYPE == 'mkv' or FILE_TYPE == 'mpg' or FILE_TYPE == 'avi':
         print("[+]Extracting Audio from Video...")
         new_sound = extractAudio(FILE_TYPE, FILENAME, script_path)
         check_required = True

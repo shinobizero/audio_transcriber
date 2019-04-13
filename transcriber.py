@@ -36,8 +36,10 @@ def runTime(start_time):
 def cleanUp(script_path, FILENAME, DELETE_CONVERT=False):
     shutil.rmtree(script_path + '/temp', ignore_errors=True)
     if FILENAME != None:
-        if os.path.isfile(script_path + '/' + FILENAME + ".wav") == True and DELETE_CONVERT == True:
-            os.remove(script_path + '/' + FILENAME + ".wav")
+        if os.path.isfile(script_path + '/' + FILENAME + "-EXTRACTED.wav") == True and DELETE_CONVERT == True:
+            os.remove(script_path + '/' + FILENAME + "-EXTRACTED.wav")
+        elif os.path.isfile(script_path + '/' + FILENAME + "-CONVERTED.wav") == True and DELETE_CONVERT == True:
+            os.remove(script_path + '/' + FILENAME + "-CONVERTED.wav")
     
 def makeTemp(script_path, TEMP_FILE):
     if not os.path.exists(script_path + '\\temp'):
@@ -264,15 +266,18 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, section
                 snippets_completed += thread_count
 
 def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_split, keep_wav):
+    if thread_count == None:
+        thread_count = 10
+    
+    if section_length == None:
+        section_length = 30
+    elif section_length < 1:
+        section_length = 1
+            
     start_time = time.time()
     FILENAME = stripExtension(INPUT_FILE, script_path)
     TEMP_FILE = script_path + '\\temp\\' + FILENAME + '-TEMP.txt'
     check_required = False
-    
-    if keep_wav == False:
-        DELETE_WAV = True
-    elif keep_wav == True:
-        DELETE_WAV = False
 
     FILE_TYPE = fileType(INPUT_FILE)           
     if FILE_TYPE == None or FILE_TYPE == 'Unsupported':
@@ -288,7 +293,7 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
         check_required = True
     elif FILE_TYPE == 'wav':
         print("[+]No file conversion needed!")
-        DELETE_WAV = False
+        keep_wav = True
         new_sound = AudioSegment.from_wav(INPUT_FILE)
 
     if check_required == True:
@@ -323,9 +328,9 @@ def runOperations(INPUT_FILE, script_path, thread_count, section_length, no_spli
 
     writeOutput(TEMP_FILE, FILENAME, script_path)
     
-    if DELETE_WAV == False:
+    if keep_wav == True:
         cleanUp(script_path, None)
-    elif DELETE_WAV == True: 
+    elif keep_wav == False: 
         cleanUp(script_path, FILENAME, DELETE_CONVERT=True)
 
     print("-------------------------------")
@@ -451,14 +456,6 @@ def main():
         section_length = options.section_length
         no_split = options.nosplit
         keep_wav = options.keep
-    
-        if thread_count == None:
-            thread_count = 10
-    
-        if section_length == None:
-            section_length = 30
-        elif section_length < 1:
-            section_length = 1
     
         if INPUT_FILE == None:
             print("[!]No Input File Supplied!\n")

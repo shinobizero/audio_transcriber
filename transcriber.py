@@ -167,26 +167,21 @@ def detectSilence(sound, ESTIMATED_SECTIONS, min_silence_len):
         silence_found = True
     return silence_found, silences
 
-def silenceRanges(silence_ranges):
+def silenceRanges(silence_ranges, silences_found):
     range_list = []
-    for section in silence_ranges:
-        silence_start = ''
-        silence_end = ''
-        silence = str(section)
-        silence = silence.replace("[", "")
-        silence = silence.replace("]", "")
-        silence = silence.replace(",", "")
-        section_end = False
-        for char in silence:
-            if char != ' ' and section_end == False:
-                silence_start = silence_start + char
-            elif char != ' ' and section_end == True:
-                silence_end = silence_end + char
-            elif char == ' ':
-                section_end = True
-            range_list.append(int(silence_start))
-            range_list.append(int(silence_end))
-
+    items_processed = 0
+    while items_processed != silences_found:
+        silence = str(silence_ranges[0])
+        silence_len = int(len(silence))
+        silence_bracket1 = int(silence.index("["))
+        space = int(silence.index(' '))
+        silence_start = int(silence[silence_bracket1+1:space-1])
+        silence_end = int(silence[space+1:silence_len-1])
+        range_list.append(silence_start)
+        range_list.append(silence_end)
+        del silence_ranges[0]
+        items_processed += 1
+    print(range_list)
     return range_list
 
 def audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, total_sections=0, silence_split=False):
@@ -327,7 +322,9 @@ def transcribeAudio(snippet, line_count, TEMP_FILE, total_snippets, pbar, single
     pbar.update(1)
 
 def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=False):
-    """Main function to run transcription operation"""
+    """
+    Main function to run transcription operation
+    """
     pbar_total = total_snippets
     working_list =[] 
     if single_file == True:
@@ -356,7 +353,9 @@ def runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_
                 snippets_completed += thread_count
 
 def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detection):
-    """All the main functions & operations are run from this function."""
+    """
+    All the main functions & operations are run from this function.
+    """
     if thread_count == None:
         thread_count = 10
 
@@ -366,6 +365,9 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     TEMP_FILE = TEMP_DIR + '\\' + FILENAME + '-TEMP.txt'
     check_required = False
 
+    """
+    File Conversion & Extraction Operations
+    """
     FILE_TYPE = fileType(INPUT_FILE)           
     if FILE_TYPE == None or FILE_TYPE == 'Unsupported':
         print("[!]ERROR: Unsupported File Type!!!")
@@ -403,13 +405,17 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     recommended_section_length = 30
     duration = (len(new_sound)+1)/1000
     
+    """
+    Splitting Operations
+    """
     if duration < recommended_section_length:
         new_sound_file = TEMP_DIR + '/' + new_sound
         shutil.copyfile(new_sound, new_sound_file)
+        silence_detection = False
     else:
         if silence_detection == True:
             ESTIMATED_SECTIONS = duration//recommended_section_length+1
-            min_silence_len = 1000
+            min_silence_len = 100
             print("[+]Detecting silence sections...")
             while True:
                 silence_found, silence_ranges = detectSilence(new_sound, ESTIMATED_SECTIONS, min_silence_len)
@@ -429,7 +435,7 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
             if SILENCE_DETECTED == True:
                 silences_found = int(len(silence_ranges))
                 print(" [!]Found " + str(silences_found) + " silence sections")
-                range_list = silenceRanges(silence_ranges)
+                range_list = silenceRanges(silence_ranges, silences_found)
                 section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, silences_found, silence_split=True)
             else:
                 print(" [!]No suitable silence sections found")
@@ -439,6 +445,9 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
       
     split_wav, total_snippets = getSnippets(TEMP_DIR)
     
+    """
+    Transcription Operations
+    """
     if total_snippets == 1:
         runTranscription(split_wav, thread_count, TEMP_FILE, total_snippets, single_file=True)
     else:
@@ -450,6 +459,9 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     print("[!]Transcription successful")
     createOutput(FILENAME, TEMP_FILE, script_path, total_snippets, section_ends)
     
+    """
+    Clean Up Operations
+    """
     if keep_wav == True:
         cleanUp(script_path, None)
     elif keep_wav == False: 

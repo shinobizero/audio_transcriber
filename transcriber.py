@@ -183,39 +183,41 @@ def silenceRanges(silence_ranges, silences_found):
         items_processed += 1
     return range_list
 
-def audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, total_sections=0, silence_split=False):
-    if silence_split == False:
-        if duration % recommended_section_length == 0:
-            sections = duration/recommended_section_length
+def audioRanges(recommended_section_length, new_sound):
+    duration = len(new_sound)
+    run_time = duration
+    range_list = []
+    section_length = recommended_section_length * 1000
+    start_range = 0
+    while run_time != 0:
+        if run_time <= section_length:
+            section = run_time
         else:
-            sections = duration//recommended_section_length+1
-        start = 0
-        section = recommended_section_length * 1000
-        print(" [!]Splitting into " + str(int(sections)) + " sections")
-    elif silence_split == True:
-        sections = total_sections
+            section = section_length
+        stop_range = start_range + section
+        range_list.append(start_range)
+        range_list.append(stop_range)
+        start_range = stop_range
+        run_time -= section
+    return range_list
+
+def audioSplitter(FILENAME, recommended_section_length, new_sound, TEMP_DIR, range_list, total_sections=0, silence_split=False):
+    sections = total_sections
     sections_processed = 0
     section_ends = []
     print("[+]Splitting audio file...")
-    while sections_processed != sections:
+    while len(range_list) != 0:
         section_number = sections_processed+1
         dummy_diff = len(str(int(sections)))-len(str(section_number))
         dummy_zeros = dummy_diff*str(0)
         output_name = TEMP_DIR + "/" + FILENAME + "-" + str(dummy_zeros) + str(section_number) + ".wav"
-        if silence_split == True:
-            start = range_list[0]
-            stop = range_list[1]
-        elif silence_split == False:
-            stop = start + section
+        start = range_list[0]
+        stop = range_list[1]
         sound = new_sound[start:stop]
         sound.export(output_name, format="wav")   
-        if silence_split == True:
-            section_ends.append(range_list[1])
-            del range_list[1]
-            del range_list[0]
-        elif silence_split == False:
-            section_ends.append(stop)
-            start = stop
+        section_ends.append(range_list[1])
+        del range_list[1]
+        del range_list[0]
         sections_processed += 1
     return section_ends
             
@@ -403,6 +405,7 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     
     recommended_section_length = 30
     duration = (len(new_sound)+1)/1000
+    ESTIMATED_SECTIONS = duration//recommended_section_length+1
     
     """
     Splitting Operations
@@ -413,8 +416,7 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
         silence_detection = False
     else:
         if silence_detection == True:
-            ESTIMATED_SECTIONS = duration//recommended_section_length+1
-            min_silence_len = 100
+            min_silence_len = 1000
             print("[+]Detecting silence sections...")
             while True:
                 silence_found, silence_ranges = detectSilence(new_sound, ESTIMATED_SECTIONS, min_silence_len)
@@ -435,12 +437,13 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
                 silences_found = int(len(silence_ranges))
                 print(" [!]Found " + str(silences_found) + " silence sections")
                 range_list = silenceRanges(silence_ranges, silences_found)
-                section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, range_list, silences_found, silence_split=True)
+                section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, TEMP_DIR, range_list, silences_found)
             else:
                 print(" [!]No suitable silence sections found")
                 silence_detection = False
     if silence_detection == False:
-        section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, duration, TEMP_DIR, None)
+        range_list = audioRanges(recommended_section_length, new_sound)
+        section_ends = audioSplitter(FILENAME, recommended_section_length, new_sound, TEMP_DIR, range_list, int(len(range_list)))
       
     split_wav, total_snippets = getSnippets(TEMP_DIR)
     

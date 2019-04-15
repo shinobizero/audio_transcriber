@@ -47,33 +47,24 @@ def makeTemp(TEMP_DIR):
     if not os.path.exists(TEMP_DIR):
         os.mkdir(TEMP_DIR)
    
-def stripExtension(INPUT_FILE, script_path):
+def stripExtension(INPUT_FILE, script_path, supported_files):
     """
     Strips extension from filename
     """
-    if '.mp3' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".mp3", "")
-    elif '.wav' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".wav", "")
-    elif '.m4a' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".m4a", "")
-    elif '.mp4' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".mp4", "")
-    elif '.mkv' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".mkv", "")
-    elif '.mpg' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".mpg", "")
-    elif '.avi' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".avi", "")
-    elif '.mpeg' in INPUT_FILE:
-        FILENAME = INPUT_FILE.replace(".mpeg", "")
-    else:
-        FILENAME = INPUT_FILE
+    has_extension = False
+    for file_type in supported_files:
+        extension = str("." + file_type)
+        if extension in str(INPUT_FILE):
+            FILENAME = INPUT_FILE.replace(extension, "")
+            has_extension = True
+            break
+    if has_extension == False:
+          FILENAME = INPUT_FILE
     FILENAME = FILENAME.replace(script_path, "")
     FILENAME = FILENAME.replace("\\", "")
     return FILENAME
 
-def fileType(INPUT_FILE):
+def fileType(INPUT_FILE, supported_files):
     """
     Determines file type of the input file, if it can't find it
     by using file type module, if that fails it will attempt to use the file's
@@ -81,38 +72,14 @@ def fileType(INPUT_FILE):
     """
     kind = filetype.guess(INPUT_FILE)
     if kind is None:
-        FILE_TYPE = None
-    elif kind.extension == 'mp3' and kind.mime == 'audio/mpeg':
+        for file_type in supported_files:
+            if file_type in INPUT_FILE:
+                FILE_TYPE = file_type
+                break
+    elif kind.extension in supported_files:
         FILE_TYPE = kind.extension
-    elif kind.extension == 'm4a' and kind.mime == 'audio/m4a':
-        FILE_TYPE = kind.extension
-    elif kind.extension == 'wav' and kind.mime == 'audio/x-wav':
-        FILE_TYPE = kind.extension
-    elif kind.extension == 'mp4' and kind.mime == 'video/mp4':
-        FILE_TYPE = kind.extension
-    elif kind.extension == 'mkv' and kind.mime == 'video/x-matroska':
-        FILE_TYPE = kind.extension
-    elif kind.extension == 'mpg' and kind.mime == 'video/mpeg':
-        FILE_TYPE = kind.extension
-    elif kind.extension == 'avi' and kind.mime == 'video/x-msvideo':
-        FILE_TYPE = kind.extension
-    if FILE_TYPE == None:
-        if ".mp3" in INPUT_FILE:
-            FILE_TYPE = 'mp3'
-        elif ".m4a" in INPUT_FILE:
-            FILE_TYPE = 'm4a'
-        elif ".wav" in INPUT_FILE:
-            FILE_TYPE = 'wav'
-        elif ".mp4" in INPUT_FILE:
-            FILE_TYPE = 'mp4'
-        elif ".mkv" in INPUT_FILE:
-            FILE_TYPE = 'mkv'
-        elif ".mpg" in INPUT_FILE or ".mpeg" in INPUT_FILE:
-            FILE_TYPE = 'mpg'
-        elif ".avi" in INPUT_FILE:
-            FILE_TYPE = 'avi'
-        else:
-            FILE_TYPE = 'Unsupported'
+    else:
+        FILE_TYPE = 'Unsupported'
     return FILE_TYPE
 
 def extractAudio(FILE_TYPE, FILENAME, script_path):
@@ -169,8 +136,7 @@ def detectSilence(sound, ESTIMATED_SECTIONS, min_silence_len):
 
 def silenceRanges(silence_ranges, silences_found):
     range_list = []
-    items_processed = 0
-    while items_processed != silences_found:
+    while len(silence_ranges) != 0:
         silence = str(silence_ranges[0])
         silence_len = int(len(silence))
         silence_bracket1 = int(silence.index("["))
@@ -179,26 +145,24 @@ def silenceRanges(silence_ranges, silences_found):
         silence_end = int(silence[space+1:silence_len-1])
         range_list.append(silence_start)
         range_list.append(silence_end)
-        del silence_ranges[0]
-        items_processed += 1
+        del silence_ranges[0]   
     return range_list
 
-def audioRanges(recommended_section_length, new_sound):
+def audioRanges(recommended_section_length, new_sound, silence_split=False):
     duration = len(new_sound)
-    run_time = duration
     range_list = []
     section_length = recommended_section_length * 1000
     start_range = 0
-    while run_time != 0:
-        if run_time <= section_length:
-            section = run_time
+    while duration != 0:
+        if duration <= section_length:
+            section = duration
         else:
             section = section_length
         stop_range = start_range + section
         range_list.append(start_range)
         range_list.append(stop_range)
         start_range = stop_range
-        run_time -= section
+        duration -= section
     return range_list
 
 def audioSplitter(FILENAME, recommended_section_length, new_sound, TEMP_DIR, range_list, total_sections=0, silence_split=False):
@@ -357,11 +321,12 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     """
     All the main functions & operations are run from this function.
     """
+    supported_files = ['mp3', 'wav', 'm4a', 'mp4', 'mkv', 'mpg', 'avi', 'mpeg']
     if thread_count == None:
         thread_count = 10
 
     start_time = time.time()
-    FILENAME = stripExtension(INPUT_FILE, script_path)
+    FILENAME = stripExtension(INPUT_FILE, script_path, supported_files)
     TEMP_DIR = script_path + '\\temp'
     TEMP_FILE = TEMP_DIR + '\\' + FILENAME + '-TEMP.txt'
     check_required = False
@@ -369,10 +334,10 @@ def runOperations(INPUT_FILE, script_path, thread_count, keep_wav, silence_detec
     """
     File Conversion & Extraction Operations
     """
-    FILE_TYPE = fileType(INPUT_FILE)           
-    if FILE_TYPE == None or FILE_TYPE == 'Unsupported':
+    FILE_TYPE = fileType(INPUT_FILE, supported_files)           
+    if FILE_TYPE == 'Unsupported':
         print("[!]ERROR: Unsupported File Type!!!")
-        return
+        exit
     elif FILE_TYPE == 'mp4' or FILE_TYPE == 'mkv' or FILE_TYPE == 'mpg' or FILE_TYPE == 'avi':
         print("[+]Extracting Audio from Video...")
         new_sound = extractAudio(FILE_TYPE, FILENAME, script_path)
